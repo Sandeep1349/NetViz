@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Force Simulator</title>
+    <style>
+        svg {
+            display: block;
+            margin: 50px auto 0; /* Center the SVG horizontally and add 50px space on top */
+        }
+        circle {
+            fill-opacity: 1.5;
+        }
+
+        line {
+            stroke: #1b1a1a;
+            stroke-opacity: 0.4;
+        }
+        .label {
+            font-size: x-small;
+            font-family: sans-serif;
+        }
+        .inactive {
+            opacity: .1;
+        }
+        body {
+            margin: null; /* Ensure no margins around the body */
+            overflow: hidden; /* Prevent scrolling */
+        }
+        .highlighted {
+        stroke-width: 2px;
+        stroke: #2a2929; /* Change stroke color */
+    }
+    </style>
+</head>
+<body>
+
+<svg id="network" viewBox="0 0 1400 1000" width="100%" height="100%"></svg>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+    function NetViz(data, svgElement) {
+        console.log("Data loaded successfully:", data);
+        let nodeDegree = {};
+        let uniqueColors = ["#1f78b4", "#33a02c", "#e31a1c", "#ff7f00", "#6a3d9a", "#b15928", "#a6cee3", "#b2df8a", "#fb9a99", "#fdbf6f"];
+
+        data.links.forEach(link => {
+            [link.source, link.target].forEach(node => {
+                nodeDegree[node] = (nodeDegree[node] || 0) + 1;
+            });
+        });
+
+        const scaleRadius = d3.scaleLinear()
+            .domain(d3.extent(Object.values(nodeDegree)))
+            .range([3, 12]);
+
+        const scaleLinkStrokeWidth = d3.scaleLinear()
+            .domain(d3.extent(Object.values(nodeDegree)))
+            .range([1, 1]);
+
+        const customColorScale = d3.scaleOrdinal()
+            .domain(data.nodes.map(d => d.cluster_label))
+            .range(uniqueColors);
+
+        const linkElements = svgElement.append("g")
+            .selectAll(".line")
+            .data(data.links)
+            .enter()
+            .append("line")
+            .style("stroke", "#d9d9d9")
+            .style("stroke-width", d => {
+                return scaleLinkStrokeWidth(nodeDegree[d.source]);
+            });
+
+        const nodeElements = svgElement.append("g")
+            .selectAll(".circle")
+            .data(data.nodes)
+            .enter()
+            .append('g')
+            .attr("class", function (d) {
+                return "sa_" + d.cluster_label.toString()
+            })
+            .on("mouseenter", function (d, data) {
+                nodeElements.classed("inactive", true);
+                d3.selectAll(".sa_" + data.cluster_label.toString()).classed("inactive", false);
+            })
+            .on("mouseleave", (d, data) => {
+                d3.selectAll(".inactive").classed("inactive", false);
+            });
+
+        const zoom = d3.zoom()
+            .scaleExtent([1, 8])
+            .on("zoom", () => {
+             svgElement.attr("transform", d3.event.transform);
+            });
+
+        svgElement.call(zoom);
+
+
+        nodeElements.append("circle")
+        .attr("r", d => scaleRadius(nodeDegree[d.id] || 1))
+            .attr("fill", d => customColorScale(d.cluster_label));
+
+        nodeElements.append("text")
+        .attr("class", "label")
+.style("font-size", d => `${Math.sqrt(scaleRadius(nodeDegree[d.id] || 1)) * 2}px`)
+
+            .attr("text-anchor", "middle")
+            .text(d => d.id);
+
+        let forceSimulation = d3.forceSimulation(data.nodes)
+            .force("collide",
+                d3.forceCollide().radius((d, i) => scaleRadius(nodeDegree[d.id] || 1) * 4))
+            .force("center", d3.forceCenter(650, 400))
+            .force("charge", d3.forceManyBody().strength(-200))
+            .force("link", d3.forceLink(data.links)
+                .id(d => d.id)
+                .distance(25)
+                .strength(0.5)
+            )
+            .on("tick", onTick);
+
+        function onTick() {
+            nodeElements.attr('transform', d => {
+                return `translate(${d.x},${d.y})`;
+            });
+
+            linkElements.attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+        }
+    }
+    
+    d3.json('https://raw.githubusercontent.com/Sandeep1349/NetViz/main/Emails_Graph_kmeans.json').then(function (data){
+        console.log("JSON data loaded successfully."); // Debugging statement
+        let svg = d3.select('#network');
+        NetViz(data, svg);
+        const zoom = d3.zoom()
+    .scaleExtent([1, 8])
+    .on("zoom", () => {
+        svgElement.attr("transform", d3.event.transform);
+    });
+
+svgElement.call(zoom);
+    }).catch(function(error) {
+        console.error("Error loading JSON data:", error); // Debugging statement
+    });
+</script>
+
+</body>
+</html>
